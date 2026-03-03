@@ -8,7 +8,9 @@ same experience on any development machine.
 ## Installing patchbay-vm
 
 ```bash
-cargo install --git https://github.com/n0-computer/patchbay patchbay-vm
+cargo install --git https://github.com/hxrts/patchbay patchbay-vm
+# Local workspace install during fork development:
+# cargo install --path ~/projects/patchbay/patchbay-vm
 ```
 
 ## Running simulations
@@ -72,6 +74,7 @@ second boot time on repeated invocations.
 ```bash
 patchbay-vm up        # Boot the VM (or verify it is running)
 patchbay-vm status    # Show VM state, SSH port, mount paths
+patchbay-vm status --json  # Machine-readable status for automation
 patchbay-vm down      # Shut down the VM
 patchbay-vm cleanup   # Remove stale sockets and PID files
 ```

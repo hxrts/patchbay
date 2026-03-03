@@ -8,4 +8,4 @@ src = "."
 build-dir = "book"
 
 [output.html]
-git-repository-url = "https://github.com/n0-computer/patchbay"
+git-repository-url = "https://github.com/hxrts/patchbay"

@@ -9,4 +9,4 @@ resolver = "2"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 authors = ["Franz Heinzmann <franz@n0.computer>"]
-repository = "https://github.com/n0-computer/patchbay"
+repository = "https://github.com/hxrts/patchbay"

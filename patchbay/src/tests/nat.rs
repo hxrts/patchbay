@@ -139,12 +139,8 @@ async fn matrix_connectivity_and_reflexive_ip() -> Result<()> {
         (Nat::Corporate, UplinkWiring::ViaCgnatIsp),
     ];
 
-    let mut case_idx = 0u16;
     for (mode, wiring) in cases {
-        let port_base = 10000 + case_idx * 10;
-        case_idx = case_idx.saturating_add(1);
-        let (lab, _dev_ns, r_dc, _r_ix, expected_ip) =
-            build_single_nat_case(mode, wiring, port_base).await?;
+        let (lab, _dev_ns, r_dc, _r_ix, expected_ip) = build_single_nat_case(mode, wiring).await?;
         let dev = lab.device_by_name("dev").unwrap();
         let r_dc_ip_str = r_dc.ip().to_string();
         dev.run_sync(move || ping(&r_dc_ip_str))?;
@@ -289,25 +285,22 @@ async fn reflexive_ip_all_combos() -> Result<()> {
         .collect();
 
     let failures: Vec<String> = futures::stream::iter(combos.into_iter().enumerate().map(
-        |(i, (mode, wiring, proto, bind))| {
-            let port_base = 14_000u16 + (i as u16) * 10;
-            async move {
-                let result: Result<()> = async {
-                    let (_lab, ctx) = build_nat_case(mode, wiring, port_base).await?;
-                    let obs = probe_reflexive(&ctx.dev, proto, bind, &ctx).await?;
-                    if obs.ip() != IpAddr::V4(ctx.expected_ip) {
-                        bail!("expected {} got {}", ctx.expected_ip, obs.ip());
-                    }
-                    Ok(())
+        |(_i, (mode, wiring, proto, bind))| async move {
+            let result: Result<()> = async {
+                let (_lab, ctx) = build_nat_case(mode, wiring).await?;
+                let obs = probe_reflexive(&ctx.dev, proto, bind, &ctx).await?;
+                if obs.ip() != IpAddr::V4(ctx.expected_ip) {
+                    bail!("expected {} got {}", ctx.expected_ip, obs.ip());
                 }
-                .await;
-                match result {
-                    Ok(()) => None,
-                    Err(e) => {
-                        let label = format!("{mode}/{wiring}/{proto}/{bind}");
-                        eprintln!("FAIL {label}: {e:#}");
-                        Some(format!("{label}: {e:#}"))
-                    }
+                Ok(())
+            }
+            .await;
+            match result {
+                Ok(()) => None,
+                Err(e) => {
+                    let label = format!("{mode}/{wiring}/{proto}/{bind}");
+                    eprintln!("FAIL {label}: {e:#}");
+                    Some(format!("{label}: {e:#}"))
                 }
             }
         },
@@ -328,11 +321,10 @@ async fn reflexive_ip_all_combos() -> Result<()> {
 #[traced_test]
 async fn port_mapping_eim_stable() -> Result<()> {
     use strum::IntoEnumIterator;
-    let mut port_base = 16_000u16;
     let mut failures = Vec::new();
     for wiring in UplinkWiring::iter() {
         let result: Result<()> = async {
-            let (lab, ctx) = build_nat_case(Nat::Home, wiring, port_base).await?;
+            let (lab, ctx) = build_nat_case(Nat::Home, wiring).await?;
             let dev = lab.device_by_name("dev").unwrap();
             let o1 = dev.probe_udp_mapping(ctx.r_dc)?;
             let o2 = dev.probe_udp_mapping(ctx.r_ix)?;
@@ -349,7 +341,6 @@ async fn port_mapping_eim_stable() -> Result<()> {
         if let Err(e) = result {
             failures.push(format!("DestIndep/{wiring}: {e:#}"));
         }
-        port_base += 10;
     }
     if !failures.is_empty() {
         bail!("{} combos failed:\n{}", failures.len(), failures.join("\n"));
@@ -362,11 +353,10 @@ async fn port_mapping_eim_stable() -> Result<()> {
 #[traced_test]
 async fn port_mapping_edm_changes() -> Result<()> {
     use strum::IntoEnumIterator;
-    let mut port_base = 16_100u16;
     let mut failures = Vec::new();
     for wiring in UplinkWiring::iter() {
         let result: Result<()> = async {
-            let (lab, ctx) = build_nat_case(Nat::Corporate, wiring, port_base).await?;
+            let (lab, ctx) = build_nat_case(Nat::Corporate, wiring).await?;
             let dev = lab.device_by_name("dev").unwrap();
             let o1 = dev.probe_udp_mapping(ctx.r_dc)?;
             let o2 = dev.probe_udp_mapping(ctx.r_ix)?;
@@ -383,7 +373,6 @@ async fn port_mapping_edm_changes() -> Result<()> {
         if let Err(e) = result {
             failures.push(format!("DestDep/{wiring}: {e:#}"));
         }
-        port_base += 10;
     }
     if !failures.is_empty() {
         bail!("{} combos failed:\n{}", failures.len(), failures.join("\n"));
@@ -579,7 +568,7 @@ async fn fullcone_external_reachable() -> Result<()> {
         .await?;
 
     let dc_ip = dc.uplink_ip().context("no dc uplink ip")?;
-    let reflector = SocketAddr::new(IpAddr::V4(dc_ip), 20_000);
+    let reflector = SocketAddr::new(IpAddr::V4(dc_ip), next_test_port_base());
     dc.spawn_reflector(reflector)?;
     tokio::time::sleep(Duration::from_millis(REFLECTOR_STARTUP_MS)).await;
 
@@ -597,10 +586,21 @@ async fn fullcone_external_reachable() -> Result<()> {
     let reply = dc.run_sync(move || {
         let sock = std::net::UdpSocket::bind("0.0.0.0:0")?;
         sock.set_read_timeout(Some(Duration::from_secs(2)))?;
-        sock.send_to(b"HELLO", mapped_addr)?;
         let mut buf = [0u8; 512];
-        let (n, _) = sock.recv_from(&mut buf)?;
-        Ok(String::from_utf8_lossy(&buf[..n]).to_string())
+        for _ in 0..5 {
+            sock.send_to(b"HELLO", mapped_addr)?;
+            match sock.recv_from(&mut buf) {
+                Ok((n, _)) => return Ok(String::from_utf8_lossy(&buf[..n]).to_string()),
+                Err(e)
+                    if e.kind() == std::io::ErrorKind::WouldBlock
+                        || e.kind() == std::io::ErrorKind::TimedOut =>
+                {
+                    continue;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
+        bail!("timed out waiting for fullcone reply")
     })?;
     assert!(
         reply.starts_with("OBSERVED "),

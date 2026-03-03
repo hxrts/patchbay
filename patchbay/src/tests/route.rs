@@ -19,7 +19,7 @@ async fn switch_default_reflexive_ip() -> Result<()> {
         nat_b,
         reflector,
         dc: _,
-    } = build_dual_nat_lab(Nat::Home, Nat::Corporate, 16_200).await?;
+    } = build_dual_nat_lab(Nat::Home, Nat::Corporate).await?;
 
     let wan_a = nat_a.uplink_ip().context("no uplink ip")?;
     let wan_b = nat_b.uplink_ip().context("no uplink ip")?;
@@ -75,7 +75,7 @@ async fn switch_default_multiple_times() -> Result<()> {
         nat_a,
         nat_b,
         reflector,
-    } = build_dual_nat_lab(Nat::Home, Nat::Home, 16_300).await?;
+    } = build_dual_nat_lab(Nat::Home, Nat::Home).await?;
 
     let wan_a = nat_a.uplink_ip().context("no uplink ip")?;
     let wan_b = nat_b.uplink_ip().context("no uplink ip")?;
@@ -112,7 +112,7 @@ async fn switch_default_tcp_roundtrip() -> Result<()> {
         nat_a: _,
         nat_b: _,
         reflector: _,
-    } = build_dual_nat_lab(Nat::Home, Nat::Corporate, 16_400).await?;
+    } = build_dual_nat_lab(Nat::Home, Nat::Corporate).await?;
 
     let dc_ip = dc.uplink_ip().context("no dc uplink ip")?;
 

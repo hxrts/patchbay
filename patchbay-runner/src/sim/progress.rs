@@ -1,4 +1,4 @@
-use std::{path::Path, time::SystemTime};
+use std::{path::Path, process::Command, time::SystemTime};
 
 use anyhow::{Context, Result};
 use serde::Serialize;
@@ -12,6 +12,10 @@ pub(crate) struct RunEnvironment {
     pub(crate) executable: String,
     pub(crate) rust_log: Option<String>,
     pub(crate) patchbay_version: String,
+    pub(crate) patchbay_git_sha: Option<String>,
+    pub(crate) patchbay_repo_url: Option<String>,
+    pub(crate) backend_mode: Option<String>,
+    pub(crate) aura_commit: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -89,6 +93,20 @@ pub(crate) async fn write_json(path: impl AsRef<Path>, value: &impl Serialize) -
 }
 
 pub(crate) fn collect_run_environment() -> Result<RunEnvironment> {
+    fn git_capture(args: &[&str]) -> Option<String> {
+        let out = Command::new("git").args(args).output().ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let text = String::from_utf8(out.stdout).ok()?;
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    }
+
     Ok(RunEnvironment {
         os: std::env::consts::OS.to_string(),
         arch: std::env::consts::ARCH.to_string(),
@@ -103,5 +121,11 @@ pub(crate) fn collect_run_environment() -> Result<RunEnvironment> {
             .unwrap_or_default(),
         rust_log: std::env::var("RUST_LOG").ok(),
         patchbay_version: env!("CARGO_PKG_VERSION").to_string(),
+        patchbay_git_sha: git_capture(&["rev-parse", "HEAD"]),
+        patchbay_repo_url: git_capture(&["config", "--get", "remote.origin.url"]),
+        backend_mode: std::env::var("PATCHBAY_BACKEND_MODE").ok(),
+        aura_commit: std::env::var("AURA_GIT_COMMIT")
+            .ok()
+            .or_else(|| std::env::var("PATCHBAY_AURA_COMMIT").ok()),
     })
 }

@@ -409,8 +409,8 @@ mod implementation {
     }
 
     fn collect_toml_files_recursive(dir: &std::path::Path, out: &mut Vec<PathBuf>) -> Result<()> {
-        for entry in
-            std::fs::read_dir(dir).with_context(|| format!("read simulation dir {}", dir.display()))?
+        for entry in std::fs::read_dir(dir)
+            .with_context(|| format!("read simulation dir {}", dir.display()))?
         {
             let entry = entry?;
             let path = entry.path();
@@ -566,7 +566,8 @@ mod implementation {
     }
 
     fn cleanup_command(prefixes: Vec<String>) -> Result<()> {
-        check_caps().context("cleanup requires rootless userns bootstrap and network privileges")?;
+        check_caps()
+            .context("cleanup requires rootless userns bootstrap and network privileges")?;
         let use_prefixes = if prefixes.is_empty() {
             default_cleanup_prefixes()
         } else {
@@ -620,8 +621,9 @@ mod implementation {
             std::fs::read_to_string(input).with_context(|| format!("read {}", input.display()))?;
         let value: toml::Value =
             toml::from_str(&text).with_context(|| format!("parse TOML {}", input.display()))?;
-        let is_sim =
-            value.get("sim").is_some() || value.get("step").is_some() || value.get("binary").is_some();
+        let is_sim = value.get("sim").is_some()
+            || value.get("step").is_some()
+            || value.get("binary").is_some();
         if is_sim {
             let sim: sim::SimFile =
                 toml::from_str(&text).with_context(|| format!("parse sim {}", input.display()))?;
@@ -629,8 +631,8 @@ mod implementation {
                 .with_context(|| format!("load topology from sim {}", input.display()))?;
             Ok((topo, true))
         } else {
-            let topo: patchbay::config::LabConfig =
-                toml::from_str(&text).with_context(|| format!("parse topology {}", input.display()))?;
+            let topo: patchbay::config::LabConfig = toml::from_str(&text)
+                .with_context(|| format!("parse topology {}", input.display()))?;
             Ok((topo, false))
         }
     }
@@ -744,7 +746,10 @@ mod implementation {
         Ok(trimmed.to_string())
     }
 
-    fn load_inspect_session(work_dir: &std::path::Path, inspect_ref: &str) -> Result<InspectSession> {
+    fn load_inspect_session(
+        work_dir: &std::path::Path,
+        inspect_ref: &str,
+    ) -> Result<InspectSession> {
         let as_path = PathBuf::from(inspect_ref);
         let session_path = if as_path.extension().and_then(|v| v.to_str()) == Some("json")
             || inspect_ref.contains('/')
@@ -930,19 +935,21 @@ mod tests {
         let vm_root = PathBuf::from("/app");
         let sim_subpath = "iroh-integration/patchbay/sims/iperf-1to1-public.toml";
 
-        let (workspace_root, sim_path) =
-            if compile_time_root.join(sim_subpath).exists() {
-                (compile_time_root.clone(), compile_time_root.join(sim_subpath))
-            } else if vm_root.join(sim_subpath).exists() {
-                (vm_root.clone(), vm_root.join(sim_subpath))
-            } else {
-                eprintln!(
-                    "Skipping test: sim file not found at {} or {}",
-                    compile_time_root.join(sim_subpath).display(),
-                    vm_root.join(sim_subpath).display()
-                );
-                return;
-            };
+        let (workspace_root, sim_path) = if compile_time_root.join(sim_subpath).exists() {
+            (
+                compile_time_root.clone(),
+                compile_time_root.join(sim_subpath),
+            )
+        } else if vm_root.join(sim_subpath).exists() {
+            (vm_root.clone(), vm_root.join(sim_subpath))
+        } else {
+            eprintln!(
+                "Skipping test: sim file not found at {} or {}",
+                compile_time_root.join(sim_subpath).display(),
+                vm_root.join(sim_subpath).display()
+            );
+            return;
+        };
         let project_root = workspace_root;
         sim::run_sims(
             vec![sim_path],

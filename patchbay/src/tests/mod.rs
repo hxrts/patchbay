@@ -21,6 +21,7 @@
 use std::{
     future::Future,
     net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::atomic::{AtomicU16, Ordering},
     thread,
     time::{Duration, Instant},
 };
@@ -36,6 +37,11 @@ use crate::{check_caps, config};
 
 /// Default reflector startup delay for VM environments.
 const REFLECTOR_STARTUP_MS: u64 = 500;
+/// Starting point for dynamically-allocated test reflector ports.
+const TEST_PORT_START: u16 = 30_000;
+/// Reserve a small contiguous block per test helper call.
+const TEST_PORT_STRIDE: u16 = 32;
+static NEXT_TEST_PORT_BASE: AtomicU16 = AtomicU16::new(TEST_PORT_START);
 
 mod alloc;
 mod devtools;
@@ -55,6 +61,10 @@ mod preset;
 mod region;
 mod route;
 mod smoke;
+
+fn next_test_port_base() -> u16 {
+    NEXT_TEST_PORT_BASE.fetch_add(TEST_PORT_STRIDE, Ordering::Relaxed)
+}
 
 // ── Shared test infrastructure ──────────────────────────────────────
 
@@ -321,11 +331,8 @@ async fn tcp_roundtrip(target: SocketAddr) -> Result<()> {
 
 // ── Lab builder helpers ──────────────────────────────────────────────
 
-async fn build_nat_case(
-    nat_mode: Nat,
-    wiring: UplinkWiring,
-    port_base: u16,
-) -> Result<(Lab, NatTestCtx)> {
+async fn build_nat_case(nat_mode: Nat, wiring: UplinkWiring) -> Result<(Lab, NatTestCtx)> {
+    let port_base = next_test_port_base();
     let lab = Lab::new().await?;
     let dc = lab.add_router("dc").build().await?;
     let upstream = match wiring {
@@ -382,7 +389,8 @@ async fn build_nat_case(
     ))
 }
 
-async fn build_dual_nat_lab(mode_a: Nat, mode_b: Nat, port_base: u16) -> Result<DualNatLab> {
+async fn build_dual_nat_lab(mode_a: Nat, mode_b: Nat) -> Result<DualNatLab> {
+    let port_base = next_test_port_base();
     let lab = Lab::new().await?;
     let dc = lab.add_router("dc").build().await?;
     let nat_a = lab.add_router("nat-a").nat(mode_a).build().await?;
@@ -417,8 +425,8 @@ async fn build_dual_nat_lab(mode_a: Nat, mode_b: Nat, port_base: u16) -> Result<
 async fn build_single_nat_case(
     nat_mode: Nat,
     wiring: UplinkWiring,
-    port_base: u16,
 ) -> Result<(Lab, String, SocketAddr, SocketAddr, Ipv4Addr)> {
+    let port_base = next_test_port_base();
     let lab = Lab::new().await?;
     let dc = lab.add_router("dc").build().await?;
     let upstream = match wiring {

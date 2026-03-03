@@ -13,7 +13,7 @@ use patchbay_utils::{
     assets::{infer_binary_mode, parse_binary_overrides, BinarySpec},
     binary_cache::set_executable,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::util::stage_binary_overrides;
 
@@ -80,7 +80,7 @@ const KNOWN_HOSTS: &str = "known_hosts";
 const RUNTIME_ENV: &str = "runtime.env";
 const RELEASE_MUSL_ASSET_X86: &str = "patchbay-x86_64-unknown-linux-musl.tar.gz";
 const RELEASE_MUSL_ASSET_ARM64: &str = "patchbay-aarch64-unknown-linux-musl.tar.gz";
-const GITHUB_REPO: &str = "https://github.com/n0-computer/patchbay.git";
+const GITHUB_REPO: &str = "https://github.com/hxrts/patchbay.git";
 const DEFAULT_MUSL_TARGET_X86: &str = "x86_64-unknown-linux-musl";
 const DEFAULT_MUSL_TARGET_ARM64: &str = "aarch64-unknown-linux-musl";
 
@@ -242,7 +242,9 @@ fn run_tests_inside_vm(vm: &VmConfig, args: &TestVmArgs) -> Result<()> {
 
     // Build the cargo test command
     // Include /sbin and /usr/sbin in PATH for nftables and other system tools
-    let mut test_cmd = String::from("export PATH=\"/sbin:/usr/sbin:$PATH\" && cd /app && . ~/.cargo/env && cargo test");
+    let mut test_cmd = String::from(
+        "export PATH=\"/sbin:/usr/sbin:$PATH\" && cd /app && . ~/.cargo/env && cargo test",
+    );
     for pkg in &args.packages {
         test_cmd.push_str(&format!(" -p {}", pkg));
     }
@@ -254,8 +256,7 @@ fn run_tests_inside_vm(vm: &VmConfig, args: &TestVmArgs) -> Result<()> {
     }
 
     // Run tests inside the VM
-    ssh_cmd(vm, &["sh", "-c", &test_cmd])
-        .context("tests failed inside VM")?;
+    ssh_cmd(vm, &["sh", "-c", &test_cmd]).context("tests failed inside VM")?;
 
     eprintln!("qemu-vm: all tests passed");
     Ok(())
@@ -284,15 +285,44 @@ pub fn cleanup_cmd() -> Result<()> {
 }
 
 /// `patchbay-vm status` entrypoint.
-pub fn status_cmd() -> Result<()> {
+pub fn status_cmd(json: bool) -> Result<()> {
     let vm = VmConfig::from_cleanup_defaults()?;
-    println!("vm-name: {}", vm.vm_name);
-    println!("vm-dir: {}", vm.vm_dir().display());
-    println!("running: {}", if is_running(&vm)? { "yes" } else { "no" });
-    if vm.runtime_file().exists() {
-        println!("runtime: {}", vm.runtime_file().display());
-        let text = std::fs::read_to_string(vm.runtime_file())?;
-        print!("{text}");
+    let running = is_running(&vm)?;
+    let runtime_path = vm.runtime_file();
+    let runtime_text = if runtime_path.exists() {
+        Some(std::fs::read_to_string(&runtime_path)?)
+    } else {
+        None
+    };
+
+    if json {
+        #[derive(Serialize)]
+        struct StatusOut<'a> {
+            vm_name: &'a str,
+            vm_dir: String,
+            running: bool,
+            runtime_file: String,
+            runtime_env: Option<String>,
+        }
+
+        let payload = StatusOut {
+            vm_name: &vm.vm_name,
+            vm_dir: vm.vm_dir().display().to_string(),
+            running,
+            runtime_file: runtime_path.display().to_string(),
+            runtime_env: runtime_text,
+        };
+        println!("{}", serde_json::to_string_pretty(&payload)?);
+    } else {
+        println!("vm-name: {}", vm.vm_name);
+        println!("vm-dir: {}", vm.vm_dir().display());
+        println!("running: {}", if running { "yes" } else { "no" });
+        if runtime_path.exists() {
+            println!("runtime: {}", runtime_path.display());
+            if let Some(text) = runtime_text {
+                print!("{text}");
+            }
+        }
     }
     Ok(())
 }
@@ -563,6 +593,7 @@ fn run_in_guest(vm: &VmConfig, args: &RunVmArgs) -> Result<()> {
         "env".to_string(),
         "NETSIM_IN_VM=1".to_string(),
         "NETSIM_TARGET_DIR=/target".to_string(),
+        "PATCHBAY_BACKEND_MODE=patchbay-vm".to_string(),
     ];
     if let Ok(rust_log) = std::env::var("NETSIM_RUST_LOG") {
         parts.push(format!("NETSIM_RUST_LOG={rust_log}"));
@@ -823,7 +854,8 @@ fn build_vm_binary_and_guest_path(
         )?;
         return Ok(format!(
             "/target/{}/release/examples/{}",
-            default_musl_target(), example
+            default_musl_target(),
+            example
         ));
     }
 
@@ -853,7 +885,8 @@ fn build_vm_binary_and_guest_path(
     if example_status.success() {
         return Ok(format!(
             "/target/{}/release/examples/{}",
-            default_musl_target(), name
+            default_musl_target(),
+            name
         ));
     }
 
@@ -867,7 +900,11 @@ fn build_vm_binary_and_guest_path(
             .current_dir(&req.source_dir),
         "build VM fallback bin",
     )?;
-    Ok(format!("/target/{}/release/{}", default_musl_target(), name))
+    Ok(format!(
+        "/target/{}/release/{}",
+        default_musl_target(),
+        name
+    ))
 }
 
 fn find_ancestor_with_file(path: &Path, file_name: &str) -> Option<PathBuf> {
@@ -952,12 +989,12 @@ fn download_release_runner(vm: &VmConfig, version: &str) -> Result<PathBuf> {
 
     let url = if version == "latest" {
         format!(
-            "https://github.com/n0-computer/patchbay/releases/latest/download/{}",
+            "https://github.com/hxrts/patchbay/releases/latest/download/{}",
             release_musl_asset()
         )
     } else {
         format!(
-            "https://github.com/n0-computer/patchbay/releases/download/{}/{}",
+            "https://github.com/hxrts/patchbay/releases/download/{}/{}",
             normalize_release_tag(version),
             release_musl_asset()
         )
@@ -1629,7 +1666,18 @@ fn ensure_guest_mounts(vm: &VmConfig) -> Result<()> {
         )?;
 
         // Make directories writable for rsync
-        ssh_cmd(vm, &["sudo", "chown", "-R", &vm.ssh_user, "/app", "/target", "/work"])?;
+        ssh_cmd(
+            vm,
+            &[
+                "sudo",
+                "chown",
+                "-R",
+                &vm.ssh_user,
+                "/app",
+                "/target",
+                "/work",
+            ],
+        )?;
 
         eprintln!("qemu-vm: syncing workspace to /app via rsync...");
         rsync_to_guest(
@@ -1849,11 +1897,10 @@ fn start_vm(vm: &mut VmConfig) -> Result<()> {
         }
     }
 
-    qemu.arg("-drive")
-        .arg(format!(
-            "if=virtio,format=qcow2,file={}",
-            vm.disk_img().display()
-        ));
+    qemu.arg("-drive").arg(format!(
+        "if=virtio,format=qcow2,file={}",
+        vm.disk_img().display()
+    ));
 
     if seed_mode.trim() == "iso" {
         qemu.arg("-drive").arg(format!(

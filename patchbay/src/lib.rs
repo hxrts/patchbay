@@ -153,6 +153,10 @@ pub use ipnet::Ipv4Net;
 
 // Linux: export real types
 #[cfg(target_os = "linux")]
+pub use crate::core::NodeId;
+#[cfg(target_os = "linux")]
+pub use crate::userns::{init_userns, init_userns_for_ctor};
+#[cfg(target_os = "linux")]
 pub use firewall::PortPolicy;
 #[cfg(target_os = "linux")]
 pub use lab::{
@@ -161,10 +165,6 @@ pub use lab::{
     Nat, NatConfig, NatConfigBuilder, NatFiltering, NatMapping, NatV6Mode, ObservedAddr, Region,
     RegionLink, Router, RouterBuilder, RouterPreset,
 };
-#[cfg(target_os = "linux")]
-pub use crate::core::NodeId;
-#[cfg(target_os = "linux")]
-pub use crate::userns::{init_userns, init_userns_for_ctor};
 
 // Non-Linux: export stubs and portable types
 #[cfg(not(target_os = "linux"))]

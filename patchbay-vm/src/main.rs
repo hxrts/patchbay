@@ -32,7 +32,10 @@ enum Command {
     /// Stop VM and helper processes.
     Down,
     /// Show VM running status.
-    Status,
+    Status {
+        #[arg(long, default_value_t = false)]
+        json: bool,
+    },
     /// Best-effort cleanup of VM helper artifacts/processes.
     Cleanup,
     /// Execute command over guest SSH.
@@ -90,7 +93,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Command::Up { recreate } => vm::up_cmd(recreate),
         Command::Down => vm::down_cmd(),
-        Command::Status => vm::status_cmd(),
+        Command::Status { json } => vm::status_cmd(json),
         Command::Cleanup => vm::cleanup_cmd(),
         Command::Ssh { cmd } => vm::ssh_cmd_cli(cmd),
         Command::Run {

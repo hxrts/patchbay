@@ -14,7 +14,10 @@ use crate::event::LabEvent;
 use crate::event::LabState;
 
 #[cfg(target_os = "linux")]
-use std::{io::{BufWriter, Write}, time::Duration};
+use std::{
+    io::{BufWriter, Write},
+    time::Duration,
+};
 
 /// How often events.jsonl is flushed and state.json is written.
 #[cfg(target_os = "linux")]

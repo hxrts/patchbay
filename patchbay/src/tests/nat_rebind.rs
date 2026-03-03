@@ -18,11 +18,10 @@ async fn mode_port_change() -> Result<()> {
         (Nat::Home, Nat::Corporate, false),
         (Nat::Corporate, Nat::Home, true),
     ];
-    let mut port_base = 16_800u16;
     let mut failures = Vec::new();
     for &(from, to, expect_stable) in cases {
         let result: Result<()> = async {
-            let (lab, ctx) = build_nat_case(from, UplinkWiring::DirectIx, port_base).await?;
+            let (lab, ctx) = build_nat_case(from, UplinkWiring::DirectIx).await?;
             let nat_handle = lab.router_by_name("nat").context("missing nat")?;
             nat_handle.set_nat_mode(to).await?;
             tokio::time::sleep(Duration::from_millis(50)).await;
@@ -44,7 +43,6 @@ async fn mode_port_change() -> Result<()> {
         if let Err(e) = result {
             failures.push(format!("{from}→{to}: {e:#}"));
         }
-        port_base += 10;
     }
     if !failures.is_empty() {
         bail!("{} failures:\n{}", failures.len(), failures.join("\n"));
@@ -61,11 +59,10 @@ async fn mode_ip_change() -> Result<()> {
     // as the packet source; the DC has no return route, so the UDP probe
     // times out rather than completing.
     let cases: &[(Nat, Nat)] = &[(Nat::None, Nat::Home)];
-    let mut port_base = 16_900u16;
     let mut failures = Vec::new();
     for &(from, to) in cases {
         let result: Result<()> = async {
-            let (lab, ctx) = build_nat_case(from, UplinkWiring::DirectIx, port_base).await?;
+            let (lab, ctx) = build_nat_case(from, UplinkWiring::DirectIx).await?;
             let nat_handle = lab.router_by_name("nat").context("missing nat")?;
             let wan_ip = nat_handle.uplink_ip().context("no uplink ip")?;
             nat_handle.set_nat_mode(to).await?;
@@ -89,7 +86,6 @@ async fn mode_ip_change() -> Result<()> {
         if let Err(e) = result {
             failures.push(format!("{from}→{to}: {e:#}"));
         }
-        port_base += 10;
     }
     if !failures.is_empty() {
         bail!("{} failures:\n{}", failures.len(), failures.join("\n"));
@@ -111,7 +107,7 @@ async fn conntrack_flush() -> Result<()> {
         eprintln!("skipping nat_rebind_conntrack_flush: conntrack not found");
         return Ok(());
     }
-    let (lab, ctx) = build_nat_case(Nat::Corporate, UplinkWiring::DirectIx, 17_000).await?;
+    let (lab, ctx) = build_nat_case(Nat::Corporate, UplinkWiring::DirectIx).await?;
     let nat_handle = lab.router_by_name("nat").context("missing nat")?;
     let bind = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0);
     let r_dc = ctx.r_dc;

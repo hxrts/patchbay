@@ -42,3 +42,37 @@ args = [
      "--config",
      "imports_granularity=Crate,group_imports=StdExternalCrate,reorder_imports=true,format_code_in_doc_comments=true",
 ]
+
+[tasks.test-canary-holepunch]
+workspace = false
+script = ['''
+  set -euo pipefail
+  cargo test -p patchbay fullcone_holepunch
+  cargo test -p patchbay home_nat_holepunch
+''']
+
+[tasks.test-canary-nat-rebind]
+workspace = false
+script = ['''
+  set -euo pipefail
+  cargo test -p patchbay mode_port_change
+  cargo test -p patchbay mode_ip_change
+  cargo test -p patchbay conntrack_flush
+''']
+
+[tasks.test-canary-firewall]
+workspace = false
+script = ['''
+  set -euo pipefail
+  cargo test -p patchbay corporate_blocks_udp
+  cargo test -p patchbay captive_portal_blocks_udp
+  cargo test -p patchbay custom_selective
+''']
+
+[tasks.test-canary]
+workspace = false
+dependencies = [
+  "test-canary-holepunch",
+  "test-canary-nat-rebind",
+  "test-canary-firewall",
+]

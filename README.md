@@ -354,7 +354,7 @@ execution model: spawn processes, apply link conditions, wait for captures, and
 assert on outputs.
 
 ```bash
-cargo install --git https://github.com/n0-computer/patchbay
+cargo install --git https://github.com/hxrts/patchbay
 
 # Run a simulation
 patchbay run ./sims/iperf-baseline.toml
@@ -374,7 +374,9 @@ The `patchbay-vm` crate wraps simulations in a QEMU Linux VM, allowing
 development on macOS:
 
 ```bash
-cargo install --git https://github.com/n0-computer/patchbay patchbay-vm
+cargo install --git https://github.com/hxrts/patchbay patchbay-vm
+# Local workspace install during fork development:
+# cargo install --path ~/projects/patchbay/patchbay-vm
 patchbay-vm run ./sims/my-sim.toml
 patchbay-vm down
 ```
